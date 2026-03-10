@@ -1,54 +1,42 @@
-# Persional Bot - Discord & Google Calendar Integration
+# Persional Bot - Trợ lý Đa năng (Google & Steam Integration)
 
-Bot Discord cá nhân hỗ trợ quản lý lịch Google Calendar, kiểm tra thông tin Steam và giám sát hệ thống.
+Bot Discord cá nhân mạnh mẽ hỗ trợ quản lý công việc qua Google Calendar, theo dõi chỉ số Game chuyên sâu từ Steam và hỗ trợ Designer tìm kiếm cảm hứng bằng AI.
 
-## 🚀 Tính năng chính
-- **Google Calendar:** Xem, thêm sự kiện trực tiếp từ Discord.
-- **Steam:** Xem thông tin hồ sơ người chơi Steam.
-- **Hệ thống:** Giám sát thông số CPU, RAM của máy chủ chạy bot.
-- **Tiện ích:** Tải file qua torrent/magnet link (sử dụng aria2c).
+## 🌟 Tính năng chính
 
-## 🛠 Cài đặt
+### 📅 Quản lý Lịch (Google Calendar)
+- **Xem lịch trình:** Lấy các sự kiện sắp tới một cách nhanh chóng.
+- **Thêm nhanh (`/addtodayevent`):** Tự động nhận diện ngày hôm nay, chỉ cần nhập giờ (HH:MM).
+- **Tạo sự kiện đầy đủ (`/addevent`):** Hỗ trợ đầy đủ ngày giờ và mô tả.
 
-1. **Yêu cầu:**
-   - Python 3.8+
-   - [aria2c](https://aria2.github.io/) (nếu dùng tính năng tải torrent)
+### 🎮 Hệ thống Steam & Game Stats
+- **Hồ sơ chi tiết (`/steam`):** 
+  - Xem trạng thái (Online/Offline/Bận).
+  - Tự động tính thời gian đã Offline (VD: Cách đây 2 ngày).
+  - Kiểm tra quốc gia, ngày tạo tài khoản và tình trạng cấm (VAC/Community Ban).
+  - Xem hoạt động đang chơi hoặc game chơi gần nhất.
+- **Chỉ số Counter-Strike 2 (`/cs2`):**
+  - Xem Kills, Deaths, K/D Ratio, tỉ lệ Headshot.
+  - Lấy tổng giờ chơi chính xác từ thư viện (thay vì in-game stats bị thiếu).
+- **Tra cứu Game toàn cầu (`/gamestat`):**
+  - Xem số lượng người chơi Online hiện tại trên toàn thế giới.
+  - Xem giá bán thực tế (VNĐ) và trạng thái giảm giá.
+  - Link nhanh tới SteamDB để soi biểu đồ Peak Player và giá rẻ nhất lịch sử.
 
-2. **Cài đặt thư viện:**
-   ```bash
-   pip install -r requirements.txt
-   ```
+### 🎨 Công cụ cho Designer (`/ref`)
+- **AI Inspiration:** Tự động vẽ ảnh minh họa ý tưởng dựa trên từ khóa bạn nhập (Sử dụng Pollinations AI).
+- **Mở rộng Moodboard:** Cung cấp link tra cứu nhanh tới Pinterest và Behance đã điền sẵn từ khóa của bạn.
 
-3. **Cấu hình:**
-   - Tạo file `.env` và điền các mã token:
-     ```env
-     DISCORD_TOKEN=your_discord_bot_token
-     STEAM_API=your_steam_api_key
-     ```
-   - **Google Calendar API:**
-     - Truy cập [Google Cloud Console](https://console.cloud.google.com/).
-     - Bật Google Calendar API.
-     - Tạo OAuth 2.0 Client ID và tải file JSON về.
-     - Đổi tên file vừa tải thành `credentials.json` và để ở thư mục gốc của bot.
+---
 
-## 📅 Hướng dẫn dùng Google Calendar
+## 🛠 Cấu hình & Cài đặt
 
-Vì bot đang ở chế độ thử nghiệm (Testing), bạn cần thêm email của mình vào danh sách người dùng thử:
-1. Vào Google Cloud Console -> APIs & Services -> OAuth consent screen.
-2. Tại phần **Test users**, nhấn **ADD USERS** và nhập email của bạn.
+1. **Yêu cầu:** Python 3.8+, [aria2c](https://aria2.github.io/).
+2. **Cài đặt thư viện:** `pip install -r requirements.txt`.
+3. **File `.env`:** Điền `DISCORD_TOKEN`, `STEAM_API`, và `MY_STEAM_ID`.
+4. **Google API:** Đặt file `credentials.json` vào thư mục gốc và thêm email của bạn vào danh sách **Test users** trong Google Cloud Console.
 
-### Các lệnh Google Calendar:
-- `/events [limit]`: Xem danh sách các sự kiện sắp tới (mặc định là 5).
-- `/addevent`: Thêm sự kiện với đầy đủ thông tin ngày và giờ.
-  - Định dạng thời gian: `YYYY-MM-DDTHH:MM:SS` (Ví dụ: `2026-03-10T14:30:00`).
-- `/addtodayevent`: Thêm nhanh sự kiện vào **ngày hôm nay**.
-  - Định dạng thời gian: `HH:MM` (Ví dụ: `14:30`).
-
-## 🎮 Các lệnh khác
-- `/steam_profile [id]`: Xem thông tin Steam (chấp nhận cả SteamID64 hoặc Custom URL).
-- `/system_monitor`: Xem tình trạng CPU, RAM của máy chủ.
-- `!torrent [link]`: Tải file qua link magnet hoặc torrent (Lệnh tiền tố `!`).
-
-## 📝 Lưu ý
-- Khi chạy lần đầu, bot sẽ mở trình duyệt để yêu cầu bạn cấp quyền truy cập Lịch Google. Sau khi đồng ý, file `token.json` sẽ được tạo ra để duy trì đăng nhập.
-- Luôn giữ file `credentials.json` và `.env` bảo mật.
+## 📝 Chú thích kỹ thuật
+- Bot sử dụng **Persistent HTTP Sessions** để duy trì kết nối mạng ổn định.
+- Cơ chế **xử lý song song (`asyncio.gather`)** giúp giảm thời gian phản hồi dữ liệu xuống mức thấp nhất.
+- Hệ thống **Logging & Timeout** giúp bot luôn hoạt động mượt mà, không bị treo khi API bên thứ ba gặp sự cố.
