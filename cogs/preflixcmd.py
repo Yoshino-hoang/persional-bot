@@ -2,8 +2,8 @@ import discord
 from discord.ext import commands
 import datetime
 import asyncio
-from .extracmd import GoogleCalendarService, SteamService
 import os
+from .extracmd import GoogleCalendarService, SteamService
 
 class Preflixcmd(commands.Cog):
     """Cog chứa các lệnh sử dụng tiền tố (!) - Đồng bộ 100% với Slash Commands"""
@@ -22,22 +22,22 @@ class Preflixcmd(commands.Cog):
 
     @commands.command(name="hi")
     async def hi_prefix(self, ctx):
-        """Chào người dùng theo tên"""
+        """Lệnh cơ bản: Chào người dùng theo tên"""
         await ctx.send(f"Chào {ctx.author.name}")
 
     @commands.command(name="hello")
     async def hello_prefix(self, ctx):
-        """Chào người dùng bằng mention"""
+        """Lệnh cơ bản: Chào người dùng bằng mention"""
         await ctx.send(f"Chào {ctx.author.mention}")
 
     # --- NHÓM LỆNH GOOGLE CALENDAR ---
 
     @commands.command(name="events")
     async def list_events_prefix(self, ctx, limit: int = 5):
-        """Xem danh sách sự kiện sắp tới"""
+        """Lệnh (!events): Xem danh sách sự kiện sắp tới"""
         if not self.calendar_service:
             await ctx.send("❌ Lịch chưa được cấu hình credentials.json!"); return
-        async with ctx.typing(): # Hiện hiệu ứng 'Bot is typing...'
+        async with ctx.typing():
             try:
                 events = self.calendar_service.get_upcoming_events(limit=limit)
                 if not events:
@@ -53,7 +53,7 @@ class Preflixcmd(commands.Cog):
 
     @commands.command(name="addtodayevent")
     async def today_event_prefix(self, ctx, summary: str, start_time: str, end_time: str, *, description: str = ""):
-        """Thêm nhanh sự kiện vào ngày hôm nay. VD: !addtodayevent 'Họp' 14:00 15:00"""
+        """Lệnh (!addtodayevent): Thêm nhanh sự kiện vào ngày hôm nay."""
         if not self.calendar_service:
             await ctx.send("❌ Lịch chưa cấu hình!"); return
         try:
@@ -63,13 +63,13 @@ class Preflixcmd(commands.Cog):
             link = self.calendar_service.add_event(summary, description, full_start, full_end)
             await ctx.send(f"✅ Đã thêm: **{summary}** vào hôm nay ({display_date})\n🔗 [Xem lịch]({link})")
         except Exception as e:
-            await ctx.send(f"❌ Lỗi định dạng giờ! VD: !addtodayevent 'Tên' 14:00 15:00")
+            await ctx.send(f"❌ Lỗi định dạng giờ! VD chuẩn: !addtodayevent 'Họp Team' 14:00 15:00")
 
-    # --- NHÓM LỆNH STEAM ---
+    # --- NHÓM LỆNH STEAM & GAME ---
 
     @commands.command(name="steam")
     async def steam_prefix(self, ctx, steam_id: str):
-        """Xem hồ sơ Steam chi tiết"""
+        """Lệnh (!steam): Xem hồ sơ Steam chi tiết"""
         async with ctx.typing():
             if not steam_id.isdigit():
                 steam_id = await self.steam_service.resolve_vanity_url(steam_id)
@@ -112,7 +112,7 @@ class Preflixcmd(commands.Cog):
 
     @commands.command(name="cs2")
     async def cs2_prefix(self, ctx, steam_id: str):
-        """Xem chỉ số Counter-Strike 2 chi tiết"""
+        """Lệnh (!cs2): Xem chỉ số kỹ năng Counter-Strike 2"""
         async with ctx.typing():
             if not steam_id.isdigit():
                 steam_id = await self.steam_service.resolve_vanity_url(steam_id)
@@ -145,7 +145,7 @@ class Preflixcmd(commands.Cog):
 
     @commands.command(name="gamestat")
     async def gamestat_prefix(self, ctx, *, game_name: str):
-        """Tra cứu thông tin game trên toàn hệ thống Steam Store"""
+        """Lệnh (!gamestat): Tra cứu số lượng người chơi và giá game"""
         async with ctx.typing():
             search = await self.steam_service.search_game_id(game_name)
             if not search: await ctx.send("❌ Không thấy game!"); return
@@ -164,11 +164,101 @@ class Preflixcmd(commands.Cog):
             embed.add_field(name="Link", value=f"[SteamDB](https://steamdb.info/app/{appid}/)", inline=True)
             await ctx.send(embed=embed)
 
+    # --- NHÓM LỆNH F1 ---
+    
+    @commands.command(name="f1_results")
+    async def f1_results_prefix(self, ctx):
+        """Lệnh (!f1_results): Xem kết quả chặng đua F1 gần nhất (Top 10)"""
+        async with ctx.typing():
+            try:
+                import fastf1
+                import pandas as pd
+                now = datetime.datetime.now()
+                schedule = fastf1.get_event_schedule(now.year)
+                
+                past_events = schedule[schedule['EventDate'] < now]
+                if past_events.empty:
+                    await ctx.send("Chưa có chặng đua nào diễn ra trong năm nay."); return
+
+                last_event = past_events.iloc[-1]
+                session = fastf1.get_session(now.year, last_event['RoundNumber'], 'R')
+                await asyncio.to_thread(session.load, telemetry=False, weather=False, messages=False)
+                
+                results = session.results.head(10) # Lấy top 10
+                
+                embed = discord.Embed(title=f"🏆 Kết quả: {last_event['EventName']}", color=discord.Color.gold())
+                
+                result_text = ""
+                for index, row in results.iterrows():
+                    time_diff = str(row.get('Time')).split('.')[-1][:8] if pd.notna(row.get('Time')) else row['Status']
+                    grid_diff = int(row['GridPosition']) - int(row['Position'])
+                    grid_str = f"({'+' if grid_diff > 0 else ''}{grid_diff})" if grid_diff != 0 else "(-)"
+                    
+                    result_text += f"**{int(row['Position'])}. {row['FullName']}** {grid_str}\n"
+                    result_text += f"└ {row['TeamName']} | `{int(row['Points'])} pts` | ⏱️ {time_diff}\n\n"
+                
+                embed.description = result_text
+                embed.set_footer(text="Dữ liệu từ Fast-F1 | Mũi tên hiển thị thay đổi vị trí so với lúc xuất phát")
+                await ctx.send(embed=embed)
+            except Exception as e:
+                await ctx.send(f"Lỗi lấy kết quả: {e}")
+
+    @commands.command(name="f1_wdc")
+    async def f1_wdc_prefix(self, ctx):
+        """Lệnh (!f1_wdc): Xem Bảng xếp hạng Tay đua (WDC) hiện tại"""
+        async with ctx.typing():
+            try:
+                from fastf1.ergast import Ergast
+                ergast = Ergast()
+                now = datetime.datetime.now()
+                standings = await asyncio.to_thread(ergast.get_driver_standings, season=now.year)
+                if not standings or not standings.content or standings.content[0].empty:
+                    await ctx.send("❌ Chưa có dữ liệu bảng xếp hạng cho mùa giải này."); return
+
+                df = standings.content[0].head(10)
+                embed = discord.Embed(title=f"🏆 Bảng xếp hạng Tay đua (WDC) {now.year}", color=discord.Color.gold())
+                
+                desc = ""
+                for _, row in df.iterrows():
+                    team = row['constructorNames'][0] if row['constructorNames'] else 'N/A'
+                    desc += f"**{row['position']}. {row['givenName']} {row['familyName']}** ({team})\n└ Điểm: `{row['points']} pts` | Thắng: `{row['wins']}`\n\n"
+                
+                embed.description = desc
+                embed.set_footer(text="Dữ liệu từ Ergast API (Top 10)")
+                await ctx.send(embed=embed)
+            except Exception as e:
+                await ctx.send(f"❌ Lỗi lấy dữ liệu WDC: {e}")
+
+    @commands.command(name="f1_wcc")
+    async def f1_wcc_prefix(self, ctx):
+        """Lệnh (!f1_wcc): Xem Bảng xếp hạng Đội đua (WCC) hiện tại"""
+        async with ctx.typing():
+            try:
+                from fastf1.ergast import Ergast
+                ergast = Ergast()
+                now = datetime.datetime.now()
+                standings = await asyncio.to_thread(ergast.get_constructor_standings, season=now.year)
+                if not standings or not standings.content or standings.content[0].empty:
+                    await ctx.send("❌ Chưa có dữ liệu bảng xếp hạng cho mùa giải này."); return
+
+                df = standings.content[0]
+                embed = discord.Embed(title=f"🏎️ Bảng xếp hạng Đội đua (WCC) {now.year}", color=discord.Color.blue())
+                
+                desc = ""
+                for _, row in df.iterrows():
+                    desc += f"**{row['position']}. {row['constructorName']}**\n└ Điểm: `{row['points']} pts` | Thắng: `{row['wins']}`\n\n"
+                
+                embed.description = desc
+                embed.set_footer(text="Dữ liệu từ Ergast API")
+                await ctx.send(embed=embed)
+            except Exception as e:
+                await ctx.send(f"❌ Lỗi lấy dữ liệu WCC: {e}")
+
     # --- DESIGNER ---
 
     @commands.command(name="ref")
     async def ref_prefix(self, ctx, *, query: str):
-        """Tìm ảnh cảm hứng thiết kế bằng AI"""
+        """Lệnh (!ref): Tìm ảnh cảm hứng thiết kế bằng AI"""
         async with ctx.typing():
             import urllib.parse
             encoded = urllib.parse.quote(query)
