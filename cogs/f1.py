@@ -290,7 +290,7 @@ class F1(commands.Cog):
             driver_code = d['Abbreviation']
             
             # Lấy thông tin vòng chạy của tay đua này
-            driver_laps = session.laps.pick_driver(driver_code)
+            driver_laps = session.laps.pick_drivers(driver_code)
             
             # 1. Lấy vòng chạy nhanh nhất
             fastest_lap = driver_laps.pick_fastest()
@@ -330,6 +330,82 @@ class F1(commands.Cog):
             await interaction.followup.send(embed=embed)
         except Exception as e:
             await interaction.followup.send(f"❌ Lỗi: {e}")
+
+    @discord.app_commands.command(name="f1_compare", description="Vẽ biểu đồ so sánh Lap Time giữa các tay đua")
+    @discord.app_commands.describe(drivers="Nhập tên các tay đua cách nhau bằng dấu phẩy (vd: VER, HAM, NOR)")
+    async def f1_compare(self, interaction: discord.Interaction, drivers: str):
+        await interaction.response.defer()
+        try:
+            import matplotlib.pyplot as plt
+            import matplotlib as mpl
+            import fastf1.plotting
+            
+            # 1. Chuẩn bị dữ liệu chặng gần nhất
+            now = datetime.datetime.now()
+            schedule = fastf1.get_event_schedule(now.year)
+            past_events = schedule[schedule['EventDate'] < now]
+            if past_events.empty:
+                await interaction.followup.send("Chưa có dữ liệu."); return
+            
+            last_event = past_events.iloc[-1]
+            session = fastf1.get_session(now.year, last_event['RoundNumber'], 'R')
+            await asyncio.to_thread(session.load, telemetry=False, weather=False, messages=False)
+
+            # 2. Xử lý danh sách tay đua nhập vào
+            driver_list = [d.strip().upper() for d in drivers.split(',')]
+            
+            # 3. Thiết lập biểu đồ (Dark Theme giống ảnh mẫu)
+            plt.style.use('dark_background')
+            fig, ax = plt.subplots(figsize=(10, 6))
+            
+            found_any = False
+            for drv in driver_list:
+                try:
+                    # Lấy dữ liệu vòng chạy của từng tay đua
+                    laps = session.laps.pick_drivers(drv)
+                    if laps.empty: continue
+                    
+                    # Lọc bỏ các vòng không hợp lệ (ví dụ: vòng vào pit) để biểu đồ mượt hơn
+                    laps = laps.pick_wo_box() 
+                    
+                    # Chuyển LapTime sang giây để vẽ
+                    y_values = laps['LapTime'].dt.total_seconds()
+                    x_values = laps['LapNumber']
+                    
+                    # Lấy màu đặc trưng của tay đua/đội đua
+                    color = fastf1.plotting.get_driver_color(drv, session=session) if drv in session.results['Abbreviation'].values else None
+                    
+                    ax.plot(x_values, y_values, label=drv, color=color, linewidth=2)
+                    found_any = True
+                except Exception as e:
+                    print(f"Lỗi vẽ tay đua {drv}: {e}")
+                    continue
+
+            if not found_any:
+                await interaction.followup.send("❌ Không tìm thấy dữ liệu cho các tay đua đã nhập."); return
+
+            # 4. Trang trí biểu đồ
+            ax.set_title(f"Lap Time Comparison: {last_event['EventName']} {now.year}", fontsize=14, pad=15)
+            ax.set_xlabel("Lap Number", fontsize=12)
+            ax.set_ylabel("Lap Time (Seconds)", fontsize=12)
+            ax.legend(loc='upper right')
+            ax.grid(color='gray', linestyle='--', alpha=0.3)
+            
+            # Lưu ảnh vào file tạm
+            plot_path = 'f1_comparison.png'
+            plt.savefig(plot_path, dpi=150, bbox_inches='tight')
+            plt.close(fig)
+
+            # 5. Gửi ảnh lên Discord
+            file = discord.File(plot_path, filename="comparison.png")
+            await interaction.followup.send(content=f"📊 Biểu đồ so sánh Lap Time tại **{last_event['EventName']}**", file=file)
+            
+            # Xóa file sau khi gửi để dọn dẹp
+            if os.path.exists(plot_path):
+                os.remove(plot_path)
+
+        except Exception as e:
+            await interaction.followup.send(f"❌ Lỗi vẽ biểu đồ: {e}")
 
 async def setup(bot):
     await bot.add_cog(F1(bot))

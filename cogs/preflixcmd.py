@@ -254,6 +254,70 @@ class Preflixcmd(commands.Cog):
             except Exception as e:
                 await ctx.send(f"❌ Lỗi lấy dữ liệu WCC: {e}")
 
+    @commands.command(name="f1_compare")
+    async def f1_compare_prefix(self, ctx, *, drivers: str):
+        """
+        Lệnh (!f1_compare): Vẽ biểu đồ so sánh Lap Time.
+        Cú pháp: !f1_compare VER, HAM, NOR
+        """
+        async with ctx.typing():
+            try:
+                import matplotlib.pyplot as plt
+                import fastf1
+                import fastf1.plotting
+                now = datetime.datetime.now()
+                schedule = fastf1.get_event_schedule(now.year)
+                past_events = schedule[schedule['EventDate'] < now]
+                if past_events.empty:
+                    await ctx.send("Chưa có dữ liệu."); return
+                
+                last_event = past_events.iloc[-1]
+                session = fastf1.get_session(now.year, last_event['RoundNumber'], 'R')
+                await asyncio.to_thread(session.load, telemetry=False, weather=False, messages=False)
+
+                driver_list = [d.strip().upper() for d in drivers.split(',')]
+                plt.style.use('dark_background')
+                fig, ax = plt.subplots(figsize=(10, 6))
+                
+                found_any = False
+                for drv in driver_list:
+                    try:
+                        laps = session.laps.pick_drivers(drv)
+                        if laps.empty: continue
+                        laps = laps.pick_wo_box() 
+                        
+                        y_values = laps['LapTime'].dt.total_seconds()
+                        x_values = laps['LapNumber']
+                        
+                        color = fastf1.plotting.get_driver_color(drv, session=session) if drv in session.results['Abbreviation'].values else None
+                        
+                        ax.plot(x_values, y_values, label=drv, color=color, linewidth=2)
+                        found_any = True
+                    except Exception as e:
+                        print(f"Lỗi vẽ tay đua {drv}: {e}")
+                        continue
+
+                if not found_any:
+                    await ctx.send("❌ Không tìm thấy dữ liệu cho các tay đua đã nhập."); return
+
+                ax.set_title(f"Lap Time Comparison: {last_event['EventName']} {now.year}", fontsize=14, pad=15)
+                ax.set_xlabel("Lap Number", fontsize=12)
+                ax.set_ylabel("Lap Time (Seconds)", fontsize=12)
+                ax.legend(loc='upper right')
+                ax.grid(color='gray', linestyle='--', alpha=0.3)
+                
+                plot_path = 'f1_comparison.png'
+                plt.savefig(plot_path, dpi=150, bbox_inches='tight')
+                plt.close(fig)
+
+                file = discord.File(plot_path, filename="comparison.png")
+                await ctx.send(content=f"📊 Biểu đồ so sánh Lap Time tại **{last_event['EventName']}**", file=file)
+                
+                if os.path.exists(plot_path):
+                    os.remove(plot_path)
+            except Exception as e:
+                await ctx.send(f"❌ Lỗi vẽ biểu đồ: {e}")
+
     # --- DESIGNER ---
 
     @commands.command(name="ref")
