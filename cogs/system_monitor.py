@@ -1,60 +1,65 @@
 import discord
-from discord import app_commands
-from discord.ext import commands
-import psutil # Thư viện lấy thông tin hệ thống
-import platform # Thư viện lấy thông tin hệ điều hành
+from discord.ext import commands, tasks
+import psutil
+import platform
 import datetime
 
 class SystemMonitor(commands.Cog):
+    """
+    Cog giám sát tài nguyên hệ thống (CPU, RAM, Disk, Network).
+    Hỗ trợ lệnh xem nhanh và có thể mở rộng để cảnh báo nếu quá tải.
+    """
     def __init__(self, bot):
         self.bot = bot
+        # Lưu thời điểm bot bắt đầu chạy để tính thời gian hoạt động (Uptime)
+        self.start_time = datetime.datetime.now()
 
-    def get_progress_bar(self, percent):
-        """Hàm tạo thanh tiến trình trực quan bằng ký tự [■■■□□□]"""
-        filled_length = int(percent / 10)
-        bar = '■' * filled_length + '□' * (10 - filled_length)
-        return f"[{bar}] {percent}%"
-
-    @app_commands.command(name="status", description="Xem tình trạng hệ thống hiện tại")
+    @discord.app_commands.command(name="status", description="Kiểm tra trạng thái và tài nguyên hệ thống của máy chủ chạy bot")
     async def status(self, interaction: discord.Interaction):
-        # Lấy thông tin CPU và RAM
+        """Hiển thị thông tin chi tiết về phần cứng và phần mềm máy chủ."""
+        await interaction.response.defer()
+
+        # Lấy thông tin CPU
         cpu_usage = psutil.cpu_percent(interval=1)
-        ram = psutil.virtual_memory()
-        
-        # Lấy thông tin uptime (thời gian máy đã chạy)
-        boot_time = datetime.datetime.fromtimestamp(psutil.boot_time())
-        uptime = datetime.datetime.now() - boot_time
-        
-        # Tạo Embed hiển thị thông tin đẹp mắt
-        embed = discord.Embed(title="📊 Tình trạng hệ thống", color=discord.Color.blue())
-        embed.add_field(name="💻 CPU", value=self.get_progress_bar(cpu_usage), inline=False)
-        embed.add_field(name="🧠 RAM", value=self.get_progress_bar(ram.percent), inline=False)
-        embed.add_field(name="📉 RAM Detail", value=f"{ram.used // (1024**2)}MB / {ram.total // (1024**2)}MB", inline=True)
-        embed.add_field(name="🕒 Uptime", value=str(uptime).split('.')[0], inline=True)
-        
-        # Thêm thông tin về OS và độ trễ bot
-        embed.set_footer(text=f"OS: {platform.system()} {platform.release()} | Ping: {round(self.bot.latency * 1000)}ms")
-        
-        await interaction.response.send_message(embed=embed)
+        cpu_count = psutil.cpu_count()
 
-    @app_commands.command(name="info", description="Xem thông tin chi tiết phần cứng")
-    async def info(self, interaction: discord.Interaction):
+        # Lấy thông tin RAM
+        memory = psutil.virtual_memory()
+        memory_used = round(memory.used / (1024 ** 3), 2)
+        memory_total = round(memory.total / (1024 ** 3), 2)
+        memory_percent = memory.percent
+
+        # Lấy thông tin Disk (Ổ cứng)
         disk = psutil.disk_usage('/')
-        net = psutil.net_io_counters()
-        
-        embed = discord.Embed(title="⚙️ Chi tiết phần cứng", color=discord.Color.dark_gray())
-        embed.add_field(name="💽 Ổ cứng (Disk)", value=f"Sử dụng: {disk.percent}% ({disk.used // (1024**3)}GB / {disk.total // (1024**3)}GB)", inline=False)
-        embed.add_field(name="🌐 Mạng (Network)", value=f"Đã gửi: {net.bytes_sent // (1024**2)}MB | Đã nhận: {net.bytes_recv // (1024**2)}MB", inline=False)
-        embed.add_field(name="🔢 Số lõi CPU", value=f"Vật lý: {psutil.cpu_count(logical=False)} | Logic: {psutil.cpu_count(logical=True)}", inline=True)
-        
-        await interaction.response.send_message(embed=embed)
+        disk_used = round(disk.used / (1024 ** 3), 2)
+        disk_total = round(disk.total / (1024 ** 3), 2)
+        disk_percent = disk.percent
 
-    # Lệnh Prefix tương ứng để bạn có thể dùng !status
-    @commands.command(name="status")
-    async def status_prefix(self, ctx):
-        cpu_usage = psutil.cpu_percent()
-        ram = psutil.virtual_memory()
-        await ctx.send(f"📊 **Hệ thống:** CPU: {cpu_usage}% | RAM: {ram.percent}%")
+        # Tính toán thời gian bot đã chạy (Uptime)
+        uptime = datetime.datetime.now() - self.start_time
+        hours, remainder = divmod(int(uptime.total_seconds()), 3600)
+        minutes, seconds = divmod(remainder, 60)
+        days, hours = divmod(hours, 24)
+
+        # Tạo Embed hiển thị
+        embed = discord.Embed(title="🖥️ Trạng thái Hệ thống", color=discord.Color.green())
+        
+        # Thông tin hệ điều hành
+        embed.add_field(name="Hệ điều hành", value=f"`{platform.system()} {platform.release()}`", inline=False)
+        
+        # Tài nguyên phần cứng
+        embed.add_field(name="CPU Usage", value=f"`{cpu_usage}%` ({cpu_count} Cores)", inline=True)
+        embed.add_field(name="RAM Usage", value=f"`{memory_used}GB / {memory_total}GB` ({memory_percent}%)", inline=True)
+        embed.add_field(name="Disk Usage", value=f"`{disk_used}GB / {disk_total}GB` ({disk_percent}%)", inline=True)
+        
+        # Thời gian hoạt động
+        embed.add_field(name="Uptime", value=f"`{days}d {hours}h {minutes}m {seconds}s`", inline=False)
+        
+        # Độ trễ của Bot (Ping)
+        embed.add_field(name="Bot Latency", value=f"`{round(self.bot.latency * 1000)}ms`", inline=True)
+
+        embed.set_footer(text=f"Last update: {datetime.datetime.now().strftime('%H:%M:%S')}")
+        await interaction.followup.send(embed=embed)
 
 async def setup(bot):
     await bot.add_cog(SystemMonitor(bot))

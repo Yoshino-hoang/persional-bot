@@ -1,6 +1,6 @@
 import discord
-from discord import app_commands
 from discord.ext import commands, tasks
+from discord import app_commands
 import json
 import os
 import re
@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 
 class Reminders(commands.Cog):
     """
-    Cog quản lý nhắc nhở, trả lời trực tiếp công khai trong kênh chạy lệnh.
+    Cog quản lý nhắc nhở, hỗ trợ cả Slash Command và Prefix Command.
     """
     def __init__(self, bot):
         self.bot = bot
@@ -35,13 +35,17 @@ class Reminders(commands.Cog):
             total_seconds += int(amount) * patterns[unit]
         return total_seconds
 
-    remind_group = app_commands.Group(name="remind", description="Quản lý nhắc nhở")
+    @commands.hybrid_group(name="remind", fallback="list", description="Quản lý nhắc nhở")
+    async def remind_group(self, ctx: commands.Context):
+        if ctx.invoked_subcommand is None:
+            await self.list_remind(ctx)
 
-    @remind_group.command(name="set", description="Hẹn giờ nhắc nhở")
-    async def set_remind(self, interaction: discord.Interaction, time: str, content: str):
+    @remind_group.command(name="set", description="Hẹn giờ nhắc nhở (VD: 10m, 1h)")
+    @app_commands.describe(time="Thời gian (VD: 10m, 1h)", content="Nội dung nhắc nhở")
+    async def set_remind(self, ctx: commands.Context, time: str, content: str):
         seconds = self.parse_time(time)
         if seconds is None or seconds <= 0:
-            await interaction.response.send_message("❌ Sai định dạng thời gian!", ephemeral=False)
+            await ctx.send("❌ Sai định dạng thời gian! Hãy dùng: 10m, 1h, 1d...")
             return
 
         remind_time = datetime.now() + timedelta(seconds=seconds)
@@ -49,38 +53,37 @@ class Reminders(commands.Cog):
         
         new_remind = {
             "id": remind_id,
-            "user_id": interaction.user.id,
-            "channel_id": interaction.channel_id,
+            "user_id": ctx.author.id,
+            "channel_id": ctx.channel.id,
             "content": content,
             "remind_at": remind_time.strftime("%Y-%m-%d %H:%M:%S")
         }
         
         self.reminders.append(new_remind)
         self.save_reminders()
-        
-        await interaction.response.send_message(f"🔔 **{interaction.user.display_name}** đã đặt nhắc nhở ID {remind_id} sau `{time}`.", ephemeral=False)
+        await ctx.send(f"🔔 **{ctx.author.display_name}** đã đặt nhắc nhở ID {remind_id} sau `{time}`.")
 
     @remind_group.command(name="list", description="Xem nhắc nhở đang chờ")
-    async def list_remind(self, interaction: discord.Interaction):
-        user_reminders = [r for r in self.reminders if r['user_id'] == interaction.user.id]
+    async def list_remind(self, ctx: commands.Context):
+        user_reminders = [r for r in self.reminders if r['user_id'] == ctx.author.id]
         if not user_reminders:
-            await interaction.response.send_message("Bạn không có nhắc nhở nào.", ephemeral=False)
+            await ctx.send("Bạn không có nhắc nhở nào.")
             return
 
-        embed = discord.Embed(title=f"🔔 Nhắc nhở của {interaction.user.display_name}", color=discord.Color.gold())
+        embed = discord.Embed(title=f"🔔 Nhắc nhở của {ctx.author.display_name}", color=discord.Color.gold())
         for r in user_reminders:
             embed.add_field(name=f"ID: {r['id']} | Lúc: {r['remind_at']}", value=r['content'], inline=False)
-        await interaction.response.send_message(embed=embed, ephemeral=False)
+        await ctx.send(embed=embed)
 
     @remind_group.command(name="cancel", description="Hủy nhắc nhở")
-    async def cancel_remind(self, interaction: discord.Interaction, remind_id: int):
+    async def cancel_remind(self, ctx: commands.Context, remind_id: int):
         original_len = len(self.reminders)
-        self.reminders = [r for r in self.reminders if not (r['id'] == remind_id and r['user_id'] == interaction.user.id)]
+        self.reminders = [r for r in self.reminders if not (r['id'] == remind_id and r['user_id'] == ctx.author.id)]
         if len(self.reminders) < original_len:
             self.save_reminders()
-            await interaction.response.send_message(f"✅ Đã hủy nhắc nhở ID {remind_id}.", ephemeral=False)
+            await ctx.send(f"✅ Đã hủy nhắc nhở ID {remind_id}.")
         else:
-            await interaction.response.send_message(f"❌ Không tìm thấy nhắc nhở ID {remind_id}.", ephemeral=False)
+            await ctx.send(f"❌ Không tìm thấy nhắc nhở ID {remind_id}.")
 
     @tasks.loop(seconds=30)
     async def check_reminders(self):
