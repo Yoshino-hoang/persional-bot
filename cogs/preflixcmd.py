@@ -151,8 +151,12 @@ class Preflixcmd(commands.Cog):
             if not search: await ctx.send("❌ Không thấy game!"); return
             
             appid = search['id']
-            tasks = [self.steam_service.get_current_players(appid), self.steam_service.get_app_details(appid)]
-            players, details = await asyncio.gather(*tasks)
+            tasks = [
+                self.steam_service.get_current_players(appid), 
+                self.steam_service.get_app_details(appid),
+                self.steam_service.get_app_reviews(appid)
+            ]
+            players, details, reviews = await asyncio.gather(*tasks)
 
             embed = discord.Embed(title=f"📊 {details.get('name')}", url=f"https://store.steampowered.com/app/{appid}", color=discord.Color.gold())
             embed.set_thumbnail(url=details.get('header_image'))
@@ -161,6 +165,20 @@ class Preflixcmd(commands.Cog):
             pr = details.get('price_overview')
             price = pr.get('final_formatted', 'Free') if pr else ("Miễn phí" if details.get('is_free') else "N/A")
             embed.add_field(name="Giá", value=price, inline=True)
+
+            meta = details.get('metacritic')
+            if meta:
+                embed.add_field(name="Metacritic", value=f"[{meta.get('score')}]({meta.get('url')})", inline=True)
+
+            if reviews:
+                total = reviews.get('total_reviews', 0)
+                if total > 0:
+                    pos_percent = round((reviews.get('total_positive', 0) / total) * 100)
+                    embed.add_field(name="Đánh giá", value=f"**{reviews.get('review_score_desc')}**\n({pos_percent}% tích cực / `{total:,}` lượt)", inline=False)
+            elif details.get('recommendations'):
+                recs = details.get('recommendations', {}).get('total', 0)
+                embed.add_field(name="Đánh giá", value=f"`{recs:,}`", inline=True)
+
             embed.add_field(name="Link", value=f"[SteamDB](https://steamdb.info/app/{appid}/)", inline=True)
             await ctx.send(embed=embed)
 

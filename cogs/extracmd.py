@@ -177,6 +177,13 @@ class SteamService:
             return data[str(app_id)]['data']
         return None
 
+    async def get_app_reviews(self, app_id):
+        """Lấy tóm tắt đánh giá: Tỉ lệ tích cực, mô tả (Very Positive...)"""
+        url = f"https://store.steampowered.com/appreviews/{app_id}"
+        params = {'json': 1, 'language': 'all', 'purchase_type': 'all', 'num_per_page': 0}
+        data = await self._get(url, params)
+        return data.get('query_summary') if data else None
+
     async def get_user_stats_for_game(self, steam_id_64, app_id=730):
         """Lấy chỉ số in-game (Kills, Deaths, Wins...) cho một game (Mặc định CS2)"""
         url = f"{self.base_url}/ISteamUserStats/GetUserStatsForGame/v0002/"

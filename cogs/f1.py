@@ -174,7 +174,17 @@ class F1(commands.Cog):
             
             results = session.results.head(10) # Lấy top 10
             
-            embed = discord.Embed(title=f"🏆 Kết quả: {last_event['EventName']}", color=discord.Color.gold())
+            # Tạo link tìm kiếm highlights trên YouTube
+            year = last_event['EventDate'].year
+            event_name = last_event['EventName']
+            search_query = f"F1 {year} {event_name} Race Highlights".replace(" ", "+")
+            highlights_url = f"https://www.youtube.com/results?search_query={search_query}"
+
+            embed = discord.Embed(
+                title=f"🏆 Kết quả: {last_event['EventName']}", 
+                description=f"**[📺 Xem Video Recap (Highlights)]({highlights_url})**\n\n",
+                color=discord.Color.gold()
+            )
             
             result_text = ""
             for index, row in results.iterrows():
@@ -194,9 +204,14 @@ class F1(commands.Cog):
                 result_text += f"**{int(row['Position'])}. {row['FullName']}** {grid_str}\n"
                 result_text += f"└ {row['TeamName']} | `{int(row['Points'])} pts` | ⏱️ {time_diff}\n\n"
             
-            embed.description = result_text
+            embed.description += result_text
             embed.set_footer(text="Dữ liệu từ Fast-F1 | Mũi tên hiển thị thay đổi vị trí so với lúc xuất phát")
-            await interaction.followup.send(embed=embed)
+            
+            # Thêm Button để xem highlights
+            view = discord.ui.View()
+            view.add_item(discord.ui.Button(label="Xem Video Recap", url=highlights_url, style=discord.ButtonStyle.link, emoji="📺"))
+            
+            await interaction.followup.send(embed=embed, view=view)
         except Exception as e:
             await interaction.followup.send(f"Lỗi lấy kết quả: {e}. (Có thể dữ liệu chặng mới nhất chưa được cập nhật)")
 
