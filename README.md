@@ -109,7 +109,7 @@ OWNER_ID=your_discord_user_id
 ---
 
 ## 👤 Tác giả
-- **Project Owner:** [Tên của bạn/GitHub]
+- **Project Owner:** Yoshino Hoang
 - **Framework:** Discord.py
 
 ---
